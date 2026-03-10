@@ -13,6 +13,8 @@ import { ReportsModule } from './reports/reports.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TabletModule } from './tablet/tablet.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { SchedulesModule } from './schedules/schedules.module';
+import { PricingModule } from './pricing/pricing.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { GatewayModule } from './gateway/gateway.module';
     NotificationsModule,
     TabletModule,
     GatewayModule,
+    SchedulesModule,
+    PricingModule,
   ],
 })
 export class AppModule {}
