@@ -1,0 +1,491 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== ENUMS =====
+
+enum Language {
+  he
+  en
+  fr
+  ar
+}
+
+enum RoomType {
+  standard
+  premium
+  accessible
+}
+
+enum RoomStatus {
+  available
+  reserved
+  occupied
+  preparation
+  waiting_for_attendant
+  immersion
+  cleaning_required
+  cleaning_in_progress
+  out_of_service
+}
+
+enum BookingStatus {
+  draft
+  pending_payment
+  confirmed
+  arrived
+  assigned
+  ready_for_immersion
+  in_progress
+  completed
+  cancelled
+  no_show
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+  refunded
+  partial
+}
+
+enum BookingSource {
+  mobile_app
+  phone
+  reception
+  website
+}
+
+enum PaymentMethod {
+  credit_card
+  saved_card
+  cash
+  transfer
+  other
+}
+
+enum PaymentGateway {
+  icount
+  zcredit
+  manual
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum EquipmentRequestStatus {
+  requested
+  acknowledged
+  delivered
+}
+
+enum AccessMethod {
+  pin_code
+  card
+  manual
+  akuvox
+}
+
+enum NotificationType {
+  booking_confirmation
+  reminder
+  ready_call
+  payment_receipt
+  cancellation
+  general
+  sms_blast
+}
+
+enum NotificationChannel {
+  sms
+  push
+  in_app
+  email
+}
+
+enum MessageStatus {
+  pending
+  sent
+  delivered
+  failed
+}
+
+enum AdminActionType {
+  manual_assign
+  override_queue
+  change_status
+  change_price
+  change_schedule
+  send_sms
+  toggle_feature
+}
+
+// ===== MODELS =====
+
+model User {
+  id                String    @id @default(uuid())
+  phone             String    @unique
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  email             String?
+  preferredLanguage Language  @default(he) @map("preferred_language")
+  savedCardToken    String?   @map("saved_card_token")
+  savedCardLast4    String?   @map("saved_card_last4") @db.Char(4)
+  isAdmin           Boolean   @default(false) @map("is_admin")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  bookings          Booking[]
+  payments          Payment[]
+  attendant         Attendant?
+  notifications     Notification[]
+  sentSmsMessages   SmsMessage[]     @relation("SentBy")
+  receivedSms       SmsMessage[]     @relation("ReceivedBy")
+  adminActions      AdminActionLog[]
+  accessLogs        AccessLog[]
+  equipmentHandled  EquipmentRequest[] @relation("HandledBy")
+  cleanedSessions   RoomSession[]      @relation("CleanedBy")
+
+  @@map("users")
+}
+
+model MikvehLocation {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  timezone  String   @default("Asia/Jerusalem")
+  isActive  Boolean  @default(true) @map("is_active")
+  settings  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rooms             Room[]
+  bookings          Booking[]
+  schedules         Schedule[]
+  scheduleOverrides ScheduleOverride[]
+  attendants        Attendant[]
+  pricingRules      PricingRule[]
+  queueEntries      QueueEntry[]
+  featureFlags      FeatureFlag[]
+  accessLogs        AccessLog[]
+  smsMessages       SmsMessage[]
+  adminActions      AdminActionLog[]
+
+  @@map("mikveh_locations")
+}
+
+model Room {
+  id               String     @id @default(uuid())
+  locationId       String     @map("location_id")
+  roomNumber       Int        @map("room_number")
+  roomType         RoomType   @default(standard) @map("room_type")
+  hasBathtub       Boolean    @default(false) @map("has_bathtub")
+  hasShower        Boolean    @default(true) @map("has_shower")
+  status           RoomStatus @default(available)
+  statusChangedAt  DateTime?  @map("status_changed_at")
+  currentBookingId String?    @map("current_booking_id")
+  features         Json?
+  isActive         Boolean    @default(true) @map("is_active")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  location         MikvehLocation @relation(fields: [locationId], references: [id])
+  currentBooking   Booking?       @relation("CurrentRoom", fields: [currentBookingId], references: [id])
+  roomSessions     RoomSession[]
+  bookings         Booking[]      @relation("AssignedRoom")
+  equipmentRequests EquipmentRequest[]
+
+  @@index([locationId, status])
+  @@map("rooms")
+}
+
+model Attendant {
+  id          String   @id @default(uuid())
+  locationId  String   @map("location_id")
+  userId      String   @unique @map("user_id")
+  displayName String   @map("display_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  isOnDuty    Boolean  @default(false) @map("is_on_duty")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+  user     User           @relation(fields: [userId], references: [id])
+  bookings Booking[]
+
+  @@map("attendants")
+}
+
+model Schedule {
+  id                     String   @id @default(uuid())
+  locationId             String   @map("location_id")
+  dayOfWeek              Int      @map("day_of_week") // 0=Sunday
+  openTime               String   @map("open_time")
+  closeTime              String   @map("close_time")
+  maxConcurrentBookings  Int      @map("max_concurrent_bookings")
+  slotDurationMinutes    Int      @default(60) @map("slot_duration_minutes")
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+
+  @@index([locationId, dayOfWeek])
+  @@map("schedules")
+}
+
+model ScheduleOverride {
+  id         String   @id @default(uuid())
+  locationId String   @map("location_id")
+  date       DateTime @db.Date
+  isClosed   Boolean  @default(false) @map("is_closed")
+  openTime   String?  @map("open_time")
+  closeTime  String?  @map("close_time")
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+
+  @@index([locationId, date])
+  @@map("schedule_overrides")
+}
+
+model Booking {
+  id                 String        @id @default(uuid())
+  locationId         String        @map("location_id")
+  userId             String        @map("user_id")
+  roomId             String?       @map("room_id")
+  attendantId        String?       @map("attendant_id")
+  bookingDate        DateTime      @map("booking_date") @db.Date
+  timeSlotStart      String        @map("time_slot_start")
+  timeSlotEnd        String        @map("time_slot_end")
+  status             BookingStatus @default(draft)
+  paymentStatus      PaymentStatus @default(unpaid) @map("payment_status")
+  source             BookingSource @default(mobile_app)
+  notesForAttendant  String?       @map("notes_for_attendant")
+  roomTypePreference RoomType?     @map("room_type_preference")
+  arrivedAt          DateTime?     @map("arrived_at")
+  assignedAt         DateTime?     @map("assigned_at")
+  readyAt            DateTime?     @map("ready_at")
+  immersionStartedAt DateTime?     @map("immersion_started_at")
+  completedAt        DateTime?     @map("completed_at")
+  cancelledAt        DateTime?     @map("cancelled_at")
+  cancellationReason String?       @map("cancellation_reason")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  location    MikvehLocation @relation(fields: [locationId], references: [id])
+  user        User           @relation(fields: [userId], references: [id])
+  room        Room?          @relation("AssignedRoom", fields: [roomId], references: [id])
+  attendant   Attendant?     @relation(fields: [attendantId], references: [id])
+  payments    Payment[]
+  roomSession RoomSession?
+  queueEntry  QueueEntry?
+  currentRoom Room[]         @relation("CurrentRoom")
+
+  @@index([locationId, bookingDate])
+  @@index([userId])
+  @@index([status])
+  @@index([bookingDate, status])
+  @@map("bookings")
+}
+
+model Payment {
+  id                   String            @id @default(uuid())
+  bookingId            String            @map("booking_id")
+  userId               String            @map("user_id")
+  amount               Decimal           @db.Decimal(10, 2)
+  currency             String            @default("ILS") @db.Char(3)
+  paymentMethod        PaymentMethod     @map("payment_method")
+  gateway              PaymentGateway
+  gatewayTransactionId String?           @map("gateway_transaction_id")
+  status               TransactionStatus @default(pending)
+  paidAt               DateTime?         @map("paid_at")
+  refundedAt           DateTime?         @map("refunded_at")
+  receiptUrl           String?           @map("receipt_url")
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([bookingId])
+  @@index([userId])
+  @@index([status])
+  @@map("payments")
+}
+
+model PricingRule {
+  id         String   @id @default(uuid())
+  locationId String   @map("location_id")
+  name       String
+  roomType   RoomType @default(standard) @map("room_type")
+  price      Decimal  @db.Decimal(10, 2)
+  currency   String   @default("ILS") @db.Char(3)
+  validFrom  DateTime? @map("valid_from") @db.Date
+  validUntil DateTime? @map("valid_until") @db.Date
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+
+  @@map("pricing_rules")
+}
+
+model RoomSession {
+  id                     String    @id @default(uuid())
+  roomId                 String    @map("room_id")
+  bookingId              String    @unique @map("booking_id")
+  startedAt              DateTime  @default(now()) @map("started_at")
+  preparationCompletedAt DateTime? @map("preparation_completed_at")
+  readyForImmersionAt    DateTime? @map("ready_for_immersion_at")
+  attendantArrivedAt     DateTime? @map("attendant_arrived_at")
+  immersionStartedAt     DateTime? @map("immersion_started_at")
+  immersionEndedAt       DateTime? @map("immersion_ended_at")
+  sessionEndedAt         DateTime? @map("session_ended_at")
+  cleaningStartedAt      DateTime? @map("cleaning_started_at")
+  cleaningCompletedAt    DateTime? @map("cleaning_completed_at")
+  cleanedById            String?   @map("cleaned_by")
+  equipmentRequests      Json?     @map("equipment_requests_json")
+  preparationChecklist   Json?     @map("preparation_checklist")
+  musicPreference        String?   @map("music_preference")
+  createdAt              DateTime  @default(now()) @map("created_at")
+
+  room              Room               @relation(fields: [roomId], references: [id])
+  booking           Booking            @relation(fields: [bookingId], references: [id])
+  cleanedBy         User?              @relation("CleanedBy", fields: [cleanedById], references: [id])
+  equipmentReqs     EquipmentRequest[]
+
+  @@index([roomId])
+  @@index([bookingId])
+  @@map("room_sessions")
+}
+
+model EquipmentRequest {
+  id            String                 @id @default(uuid())
+  roomSessionId String                 @map("room_session_id")
+  roomId        String                 @map("room_id")
+  itemType      String                 @map("item_type")
+  quantity      Int                    @default(1)
+  status        EquipmentRequestStatus @default(requested)
+  requestedAt   DateTime               @default(now()) @map("requested_at")
+  deliveredAt   DateTime?              @map("delivered_at")
+  handledById   String?                @map("handled_by")
+
+  roomSession RoomSession @relation(fields: [roomSessionId], references: [id])
+  room        Room        @relation(fields: [roomId], references: [id])
+  handledBy   User?       @relation("HandledBy", fields: [handledById], references: [id])
+
+  @@map("equipment_requests")
+}
+
+model QueueEntry {
+  id         String   @id @default(uuid())
+  locationId String   @map("location_id")
+  bookingId  String   @unique @map("booking_id")
+  position   Int
+  enteredAt  DateTime @default(now()) @map("entered_at")
+  assignedAt DateTime? @map("assigned_at")
+  isActive   Boolean  @default(true) @map("is_active")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+  booking  Booking        @relation(fields: [bookingId], references: [id])
+
+  @@index([locationId, isActive])
+  @@map("queue_entries")
+}
+
+model AccessLog {
+  id          String       @id @default(uuid())
+  locationId  String       @map("location_id")
+  userId      String?      @map("user_id")
+  accessMethod AccessMethod @map("access_method")
+  accessPoint String       @map("access_point")
+  granted     Boolean
+  attemptedAt DateTime     @default(now()) @map("attempted_at")
+  rawData     Json?        @map("raw_data")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+  user     User?          @relation(fields: [userId], references: [id])
+
+  @@index([locationId, attemptedAt])
+  @@index([userId])
+  @@map("access_logs")
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  userId    String              @map("user_id")
+  bookingId String?             @map("booking_id")
+  type      NotificationType
+  channel   NotificationChannel
+  content   String
+  status    MessageStatus       @default(pending)
+  sentAt    DateTime?           @map("sent_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("notifications")
+}
+
+model SmsMessage {
+  id              String        @id @default(uuid())
+  locationId      String        @map("location_id")
+  sentById        String        @map("sent_by")
+  recipientPhone  String        @map("recipient_phone")
+  recipientUserId String?       @map("recipient_user_id")
+  message         String
+  isBlast         Boolean       @default(false) @map("is_blast")
+  status          MessageStatus @default(pending)
+  sentAt          DateTime?     @map("sent_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  location      MikvehLocation @relation(fields: [locationId], references: [id])
+  sentBy        User           @relation("SentBy", fields: [sentById], references: [id])
+  recipientUser User?          @relation("ReceivedBy", fields: [recipientUserId], references: [id])
+
+  @@map("sms_messages")
+}
+
+model AdminActionLog {
+  id          String          @id @default(uuid())
+  locationId  String          @map("location_id")
+  adminUserId String          @map("admin_user_id")
+  actionType  AdminActionType @map("action_type")
+  entityType  String          @map("entity_type")
+  entityId    String          @map("entity_id")
+  details     Json?
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  location  MikvehLocation @relation(fields: [locationId], references: [id])
+  adminUser User           @relation(fields: [adminUserId], references: [id])
+
+  @@map("admin_actions_log")
+}
+
+model FeatureFlag {
+  id         String   @id @default(uuid())
+  locationId String   @map("location_id")
+  featureKey String   @map("feature_key")
+  isEnabled  Boolean  @default(false) @map("is_enabled")
+  config     Json?
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  location MikvehLocation @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, featureKey])
+  @@map("feature_flags")
+}
