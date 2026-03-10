@@ -1,8 +1,12 @@
 import axios from 'axios';
+import { installMockApi } from './mockApi';
 
 const api = axios.create({
   baseURL: '/api',
 });
+
+// Always use mock in demo mode (no backend)
+installMockApi(api);
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('zentro_token');

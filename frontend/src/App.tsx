@@ -12,10 +12,14 @@ import RoomTablet from './pages/RoomTablet';
 import HallwayDisplay from './pages/HallwayDisplay';
 import AdminDashboard from './pages/AdminDashboard';
 import ReportsPage from './pages/ReportsPage';
+import DemoPage from './pages/DemoPage';
 
 function App() {
   return (
     <Routes>
+      {/* Demo - split screen */}
+      <Route path="/demo" element={<DemoPage />} />
+
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
 
@@ -43,8 +47,8 @@ function App() {
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/admin/reports" element={<ReportsPage />} />
 
-      {/* Default redirect */}
-      <Route path="*" element={<Navigate to="/home" replace />} />
+      {/* Default redirect to demo */}
+      <Route path="*" element={<Navigate to="/demo" replace />} />
     </Routes>
   );
 }
