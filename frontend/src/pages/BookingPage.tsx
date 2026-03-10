@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingsApi } from '../lib/api';
 import type { TimeSlot } from '../types';
-import { ArrowRight, Calendar, Clock } from 'lucide-react';
+import { ArrowRight, Clock } from 'lucide-react';
+import HebrewCalendar from '../components/HebrewCalendar';
 
-const LOCATION_ID = localStorage.getItem('zentro_location') || '';
+const LOCATION_ID = localStorage.getItem('zentro_location') || 'loc-demo';
 
 export default function BookingPage() {
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState('');
   const [notes, setNotes] = useState('');
@@ -16,16 +17,15 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  // Set min date to today
-  const today = new Date().toISOString().split('T')[0];
+  const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : '';
 
   useEffect(() => {
-    if (!selectedDate) return;
+    if (!dateStr) return;
     const loadSlots = async () => {
       setLoadingSlots(true);
       setSelectedSlot('');
       try {
-        const res = await bookingsApi.getSlots(LOCATION_ID, selectedDate);
+        const res = await bookingsApi.getSlots(LOCATION_ID, dateStr);
         setSlots(res.data);
       } catch {
         setSlots([]);
@@ -33,15 +33,15 @@ export default function BookingPage() {
       setLoadingSlots(false);
     };
     loadSlots();
-  }, [selectedDate]);
+  }, [dateStr]);
 
   const handleSubmit = async () => {
-    if (!selectedDate || !selectedSlot) return;
+    if (!dateStr || !selectedSlot) return;
     setSubmitting(true);
     try {
       const res = await bookingsApi.create({
         locationId: LOCATION_ID,
-        bookingDate: selectedDate,
+        bookingDate: dateStr,
         timeSlotStart: selectedSlot,
         notesForAttendant: notes || undefined,
         roomTypePreference: roomPreference || undefined,
@@ -51,15 +51,6 @@ export default function BookingPage() {
       alert('שגיאה ביצירת ההזמנה');
     }
     setSubmitting(false);
-  };
-
-  const formatDateHe = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('he-IL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
   };
 
   return (
@@ -72,25 +63,12 @@ export default function BookingPage() {
         <h1 className="text-lg font-bold text-blue-900">הזמנה חדשה</h1>
       </header>
 
-      <div className="max-w-lg mx-auto px-6 py-6 space-y-6">
-        {/* Date picker */}
-        <div className="bg-white rounded-2xl shadow-sm border p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <Calendar size={20} className="text-blue-600" />
-            <h2 className="font-bold text-gray-900">בחרי תאריך</h2>
-          </div>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            min={today}
-            className="w-full border rounded-xl px-4 py-3 text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            dir="ltr"
-          />
-          {selectedDate && (
-            <p className="mt-2 text-sm text-gray-500">{formatDateHe(selectedDate)}</p>
-          )}
-        </div>
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+        {/* Hebrew Calendar */}
+        <HebrewCalendar
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+        />
 
         {/* Time slots */}
         {selectedDate && (

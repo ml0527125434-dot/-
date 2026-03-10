@@ -5,9 +5,6 @@ const api = axios.create({
   baseURL: '/api',
 });
 
-// Always use mock in demo mode (no backend)
-installMockApi(api);
-
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('zentro_token');
   if (token) {
@@ -16,16 +13,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('zentro_token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  },
-);
+// Mock API must be installed AFTER auth interceptor (axios runs request interceptors LIFO)
+installMockApi(api);
 
 // Auth
 export const authApi = {
