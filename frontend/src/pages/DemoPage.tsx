@@ -13,8 +13,15 @@ import {
   getAvailableSlots,
   notifyChange,
   mockUsers,
+  getMusicTracks,
+  getRoomMusicState,
+  changeRoomMusic,
+  changeRoomVolume,
+  exitRoom,
+  addManualQueueEntry,
+  getDefaultMusicTrack,
 } from '../lib/mockData';
-import type { Room, Booking, QueueEntry } from '../types';
+import type { Room, Booking, QueueEntry, MusicTrack } from '../types';
 import {
   Eye,
   UserCheck,
@@ -25,6 +32,15 @@ import {
   Clock,
   Package,
   CalendarDays,
+  Music,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  LogOut,
+  UserPlus,
 } from 'lucide-react';
 import HebrewCalendar from '../components/HebrewCalendar';
 
@@ -39,6 +55,21 @@ export default function DemoPage() {
   });
   const [tabletReady, setTabletReady] = useState(false);
   const [notification, setNotification] = useState('');
+
+  // Music state
+  const [musicTracks, setMusicTracks] = useState<MusicTrack[]>([]);
+  const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
+  const [volume, setVolume] = useState(50);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [showMusic, setShowMusic] = useState(false);
+  const [showExit, setShowExit] = useState(false);
+  const [exitCode, setExitCode] = useState('');
+  const [sessionEnded, setSessionEnded] = useState(false);
+
+  // Manual queue state
+  const [showManualQueue, setShowManualQueue] = useState(false);
+  const [manualForm, setManualForm] = useState({ phone: '', firstName: '', lastName: '', notes: '' });
+  const [manualAdding, setManualAdding] = useState(false);
 
   // Booking state
   const [bookingDate, setBookingDate] = useState<Date | null>(null);
@@ -70,6 +101,15 @@ export default function DemoPage() {
     return unsub;
   }, [loadAll]);
 
+  // Load music tracks
+  useEffect(() => {
+    const tracks = getMusicTracks();
+    setMusicTracks(tracks);
+    const state = getRoomMusicState(selectedTabletRoom);
+    setCurrentTrackId(state.trackId);
+    setVolume(state.volume);
+  }, [selectedTabletRoom]);
+
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), 2500);
@@ -88,6 +128,53 @@ export default function DemoPage() {
   const handleComplete = (roomId: string) => { completeImmersion(roomId); notify('טבילה הושלמה'); };
   const handleClean = (roomId: string) => { cleanRoom(roomId); notify('חדר נוקה - פנוי'); };
   const handleTabletReady = () => { markReady(selectedTabletRoom); setTabletReady(true); notify('מוכנה לטבילה!'); };
+
+  const handleMusicChange = (trackId: string) => {
+    changeRoomMusic(selectedTabletRoom, trackId, volume);
+    setCurrentTrackId(trackId);
+    notify('שיר שונה');
+  };
+  const handleVolumeChange = (v: number) => {
+    changeRoomVolume(selectedTabletRoom, v);
+    setVolume(v);
+  };
+  const currentTrack = musicTracks.find(t => t.id === currentTrackId) || getDefaultMusicTrack();
+  const handleNextTrack = () => {
+    const idx = musicTracks.findIndex(t => t.id === currentTrackId);
+    const next = musicTracks[(idx + 1) % musicTracks.length];
+    if (next) handleMusicChange(next.id);
+  };
+  const handlePrevTrack = () => {
+    const idx = musicTracks.findIndex(t => t.id === currentTrackId);
+    const prev = musicTracks[(idx - 1 + musicTracks.length) % musicTracks.length];
+    if (prev) handleMusicChange(prev.id);
+  };
+  const handleExitCode = () => {
+    if (exitCode === '1234') {
+      exitRoom(selectedTabletRoom, 'room_code');
+      setSessionEnded(true);
+      notify('יציאה אושרה - חדר מתאפס');
+      setTimeout(() => { setSessionEnded(false); setShowExit(false); setExitCode(''); }, 3000);
+    } else {
+      notify('קוד שגוי');
+    }
+  };
+  const handleExitMainDoor = () => {
+    exitRoom(selectedTabletRoom, 'main_door');
+    setSessionEnded(true);
+    notify('יציאה דרך דלת ראשית - חדר מתאפס');
+    setTimeout(() => { setSessionEnded(false); setShowExit(false); }, 3000);
+  };
+  const handleManualAdd = () => {
+    if (!manualForm.phone) return;
+    setManualAdding(true);
+    addManualQueueEntry(manualForm);
+    setManualForm({ phone: '', firstName: '', lastName: '', notes: '' });
+    notify('לקוחה נוספה לתור');
+    setManualAdding(false);
+    setShowManualQueue(false);
+    notifyChange();
+  };
 
   const handleBookSlot = (slot: string) => {
     setBookingSlot(slot);
@@ -314,8 +401,29 @@ export default function DemoPage() {
             <div className="bg-purple-600 text-white px-3 py-1.5 flex items-center gap-1.5 shrink-0">
               <Droplets size={14} />
               <span className="font-bold text-xs">בלנית</span>
+              <button onClick={() => setShowManualQueue(!showManualQueue)}
+                className="mr-auto bg-purple-500 hover:bg-purple-400 text-white px-1.5 py-0.5 rounded text-[9px] flex items-center gap-0.5 transition">
+                <UserPlus size={9} />הוספה לתור
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              {/* Manual queue add */}
+              {showManualQueue && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 space-y-1">
+                  <input value={manualForm.phone} onChange={e => setManualForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="טלפון *" className="w-full border rounded px-2 py-1 text-[10px]" dir="ltr" />
+                  <div className="grid grid-cols-2 gap-1">
+                    <input value={manualForm.firstName} onChange={e => setManualForm(f => ({ ...f, firstName: e.target.value }))}
+                      placeholder="שם פרטי" className="border rounded px-2 py-1 text-[10px]" />
+                    <input value={manualForm.lastName} onChange={e => setManualForm(f => ({ ...f, lastName: e.target.value }))}
+                      placeholder="משפחה" className="border rounded px-2 py-1 text-[10px]" />
+                  </div>
+                  <button onClick={action(handleManualAdd)} disabled={!manualForm.phone || manualAdding}
+                    className="w-full bg-blue-500 text-white py-1 rounded text-[10px] font-medium hover:bg-blue-600 disabled:opacity-50 transition">
+                    {manualAdding ? 'מוסיף...' : 'הוסף לתור'}
+                  </button>
+                </div>
+              )}
               {attData?.readyForImmersion?.length > 0 && (
                 <div>
                   <div className="text-[10px] font-bold text-red-600 mb-1 flex items-center gap-1">
@@ -385,7 +493,7 @@ export default function DemoPage() {
               <Tablet size={14} />
               <span className="font-bold text-xs">טאבלט חדר</span>
               <select value={selectedTabletRoom}
-                onChange={e => { setSelectedTabletRoom(e.target.value); setTabletReady(false); setTabletChecklist({ nail_polish: false, shampoo: false, comb: false, final_check: false }); }}
+                onChange={e => { setSelectedTabletRoom(e.target.value); setTabletReady(false); setSessionEnded(false); setShowMusic(false); setShowExit(false); setTabletChecklist({ nail_polish: false, shampoo: false, comb: false, final_check: false }); }}
                 className="mr-auto text-[10px] bg-teal-700 text-white rounded px-1 py-0.5 border-0">
                 {rooms.filter(r => r.currentBooking).map(r => (
                   <option key={r.id} value={r.id}>חדר {r.roomNumber} - {r.currentBooking?.user?.firstName}</option>
@@ -397,6 +505,16 @@ export default function DemoPage() {
               {(() => {
                 const room = rooms.find(r => r.id === selectedTabletRoom);
                 const isWaiting = room?.status === 'waiting_for_attendant' || tabletReady;
+
+                if (sessionEnded) {
+                  return (
+                    <div className="text-center py-8 bg-green-50 rounded-xl">
+                      <div className="text-3xl mb-2">✓</div>
+                      <div className="text-lg font-bold text-green-800">תודה על ביקורך!</div>
+                      <div className="text-sm text-green-600">המוזיקה והחדר מתאפסים...</div>
+                    </div>
+                  );
+                }
 
                 if (isWaiting) {
                   return (
@@ -424,6 +542,27 @@ export default function DemoPage() {
                       </div>
                     </div>
 
+                    {/* Now Playing mini bar */}
+                    {currentTrack && (
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-1.5 flex items-center gap-2">
+                        <Music size={12} className="text-purple-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-medium truncate">{currentTrack.title}</div>
+                          <div className="text-[9px] text-gray-400 truncate">{currentTrack.artist}</div>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <button onClick={action(handlePrevTrack)} className="p-0.5 hover:bg-purple-100 rounded"><SkipForward size={10} className="text-purple-500" /></button>
+                          <button onClick={action(() => setIsPlaying(!isPlaying))} className="p-0.5 hover:bg-purple-100 rounded">
+                            {isPlaying ? <Pause size={12} className="text-purple-500" /> : <Play size={12} className="text-purple-500" />}
+                          </button>
+                          <button onClick={action(handleNextTrack)} className="p-0.5 hover:bg-purple-100 rounded"><SkipBack size={10} className="text-purple-500" /></button>
+                          <button onClick={action(() => handleVolumeChange(volume > 0 ? 0 : 50))} className="p-0.5 hover:bg-purple-100 rounded">
+                            {volume > 0 ? <Volume2 size={10} className="text-purple-500" /> : <VolumeX size={10} className="text-red-400" />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Checklist */}
                     <div>
                       <div className="text-[10px] font-bold text-gray-400 mb-1">רשימת הכנה</div>
@@ -439,15 +578,72 @@ export default function DemoPage() {
                       ))}
                     </div>
 
-                    {/* Equipment request */}
-                    <div className="flex gap-1 flex-wrap">
-                      {['מגבת', 'סבון', 'מסרק', 'מייבש'].map(item => (
+                    {/* Quick actions row */}
+                    <div className="flex gap-1">
+                      {['מגבת', 'סבון', 'מסרק'].map(item => (
                         <button key={item} onClick={action(() => notify(`${item} - בקשה נשלחה`))}
-                          className="bg-orange-50 border border-orange-200 rounded px-2 py-1 text-[10px] hover:bg-orange-100 flex items-center gap-1 transition">
+                          className="bg-orange-50 border border-orange-200 rounded px-2 py-1 text-[10px] hover:bg-orange-100 flex items-center gap-1 transition flex-1">
                           <Package size={10} className="text-orange-500" />{item}
                         </button>
                       ))}
+                      <button onClick={action(() => { setShowMusic(!showMusic); setShowExit(false); })}
+                        className={`border rounded px-2 py-1 text-[10px] flex items-center gap-1 transition flex-1 ${showMusic ? 'bg-purple-100 border-purple-300' : 'bg-purple-50 border-purple-200 hover:bg-purple-100'}`}>
+                        <Music size={10} className="text-purple-500" />מוזיקה
+                      </button>
+                      <button onClick={action(() => { setShowExit(!showExit); setShowMusic(false); })}
+                        className={`border rounded px-2 py-1 text-[10px] flex items-center gap-1 transition flex-1 ${showExit ? 'bg-red-100 border-red-300' : 'bg-red-50 border-red-200 hover:bg-red-100'}`}>
+                        <LogOut size={10} className="text-red-500" />יציאה
+                      </button>
                     </div>
+
+                    {/* Music panel */}
+                    {showMusic && (
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 space-y-2">
+                        <div className="text-[10px] font-bold text-purple-700">בחירת מוזיקה</div>
+                        {/* Volume slider */}
+                        <div className="flex items-center gap-2">
+                          <VolumeX size={10} className="text-gray-400" />
+                          <input type="range" min={0} max={100} value={volume}
+                            onChange={e => handleVolumeChange(Number(e.target.value))}
+                            className="flex-1 h-1 accent-purple-500" />
+                          <Volume2 size={10} className="text-gray-400" />
+                          <span className="text-[9px] text-gray-500 w-6 text-center">{volume}</span>
+                        </div>
+                        {/* Track list */}
+                        <div className="max-h-28 overflow-y-auto space-y-1">
+                          {musicTracks.map(track => (
+                            <button key={track.id} onClick={action(() => handleMusicChange(track.id))}
+                              className={`w-full text-right p-1.5 rounded text-[10px] transition ${
+                                currentTrackId === track.id ? 'bg-purple-200 border border-purple-400' : 'bg-white hover:bg-purple-100 border border-transparent'
+                              }`}>
+                              <div className="font-medium">{track.title}</div>
+                              <div className="text-[9px] text-gray-400">{track.artist}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Exit panel */}
+                    {showExit && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-2 space-y-2">
+                        <div className="text-[10px] font-bold text-red-700">יציאה מהחדר</div>
+                        <div className="flex gap-1">
+                          <input value={exitCode} onChange={e => setExitCode(e.target.value)}
+                            placeholder="קוד יציאה (1234)" maxLength={4} dir="ltr"
+                            className="flex-1 border rounded px-2 py-1 text-xs text-center" />
+                          <button onClick={action(handleExitCode)}
+                            disabled={exitCode.length < 4}
+                            className="bg-red-500 text-white px-3 py-1 rounded text-[10px] hover:bg-red-600 disabled:opacity-50 transition">
+                            אישור
+                          </button>
+                        </div>
+                        <button onClick={action(handleExitMainDoor)}
+                          className="w-full bg-gray-500 text-white py-1.5 rounded text-[10px] hover:bg-gray-600 transition flex items-center justify-center gap-1">
+                          <LogOut size={10} />יציאה דרך דלת ראשית
+                        </button>
+                      </div>
+                    )}
 
                     {/* Ready button */}
                     <button onClick={action(handleTabletReady)}
