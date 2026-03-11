@@ -107,6 +107,7 @@ export default function ReceptionDashboard() {
             queue={queue}
             rooms={rooms.filter((r) => r.status === 'available')}
             onAssign={handleAssign}
+            onRefresh={loadData}
           />
         </div>
 

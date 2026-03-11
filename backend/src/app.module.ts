@@ -15,6 +15,7 @@ import { TabletModule } from './tablet/tablet.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PricingModule } from './pricing/pricing.module';
+import { MusicModule } from './music/music.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { PricingModule } from './pricing/pricing.module';
     GatewayModule,
     SchedulesModule,
     PricingModule,
+    MusicModule,
   ],
 })
 export class AppModule {}

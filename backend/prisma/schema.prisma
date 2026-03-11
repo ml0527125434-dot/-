@@ -127,6 +127,15 @@ enum AdminActionType {
   change_schedule
   send_sms
   toggle_feature
+  manage_music
+  add_to_queue
+}
+
+enum ExitMethod {
+  room_code
+  main_door
+  manual
+  timeout
 }
 
 // ===== MODELS =====
@@ -180,6 +189,7 @@ model MikvehLocation {
   accessLogs        AccessLog[]
   smsMessages       SmsMessage[]
   adminActions      AdminActionLog[]
+  musicTracks       MusicTrack[]
 
   @@map("mikveh_locations")
 }
@@ -359,11 +369,17 @@ model RoomSession {
   equipmentRequests      Json?     @map("equipment_requests_json")
   preparationChecklist   Json?     @map("preparation_checklist")
   musicPreference        String?   @map("music_preference")
+  musicTrackId           String?   @map("music_track_id")
+  musicVolume            Int       @default(50) @map("music_volume")
+  exitMethod             ExitMethod? @map("exit_method")
+  exitCode               String?   @map("exit_code")
+  exitedAt               DateTime? @map("exited_at")
   createdAt              DateTime  @default(now()) @map("created_at")
 
   room              Room               @relation(fields: [roomId], references: [id])
   booking           Booking            @relation(fields: [bookingId], references: [id])
   cleanedBy         User?              @relation("CleanedBy", fields: [cleanedById], references: [id])
+  musicTrack        MusicTrack?        @relation(fields: [musicTrackId], references: [id])
   equipmentReqs     EquipmentRequest[]
 
   @@index([roomId])
@@ -488,4 +504,25 @@ model FeatureFlag {
 
   @@unique([locationId, featureKey])
   @@map("feature_flags")
+}
+
+model MusicTrack {
+  id           String   @id @default(uuid())
+  locationId   String   @map("location_id")
+  title        String
+  artist       String?
+  url          String
+  duration     Int?     // seconds
+  category     String   @default("general") // relaxing, classical, nature, general
+  isDefault    Boolean  @default(false) @map("is_default")
+  sortOrder    Int      @default(0) @map("sort_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  location     MikvehLocation @relation(fields: [locationId], references: [id])
+  roomSessions RoomSession[]
+
+  @@index([locationId, isActive])
+  @@map("music_tracks")
 }

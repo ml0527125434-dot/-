@@ -7,9 +7,10 @@ import {
   IsInt,
   ValidateNested,
   IsObject,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class EquipmentItem {
   @ApiProperty() @IsString() itemType: string;
@@ -25,7 +26,21 @@ class RequestEquipmentDto {
 }
 
 class MusicDto {
-  @ApiProperty() @IsString() preference: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() trackId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() volume?: number;
+}
+
+class VolumeDto {
+  @ApiProperty() @IsInt() volume: number;
+}
+
+class ExitDto {
+  @ApiProperty() @IsString() exitMethod: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() exitCode?: string;
+}
+
+class ExitCodeDto {
+  @ApiProperty() @IsString() code: string;
 }
 
 @ApiTags('Tablet')
@@ -61,8 +76,26 @@ export class TabletController {
   }
 
   @Post(':id/music')
-  @ApiOperation({ summary: 'Change music preference' })
+  @ApiOperation({ summary: 'Change music track and/or volume' })
   changeMusic(@Param('id') id: string, @Body() dto: MusicDto) {
-    return this.tabletService.changeMusic(id, dto.preference);
+    return this.tabletService.changeMusic(id, dto.trackId ?? null, dto.volume);
+  }
+
+  @Post(':id/volume')
+  @ApiOperation({ summary: 'Change music volume' })
+  changeVolume(@Param('id') id: string, @Body() dto: VolumeDto) {
+    return this.tabletService.changeVolume(id, dto.volume);
+  }
+
+  @Post(':id/exit')
+  @ApiOperation({ summary: 'Guest exits room (code or main door)' })
+  exitRoom(@Param('id') id: string, @Body() dto: ExitDto) {
+    return this.tabletService.exitRoom(id, dto.exitMethod, dto.exitCode);
+  }
+
+  @Post(':id/exit/verify')
+  @ApiOperation({ summary: 'Verify exit code and complete session' })
+  verifyExitCode(@Param('id') id: string, @Body() dto: ExitCodeDto) {
+    return this.tabletService.verifyExitCode(id, dto.code);
   }
 }

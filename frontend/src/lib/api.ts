@@ -60,8 +60,14 @@ export const tabletApi = {
   markReady: (roomId: string) => api.post(`/tablet/room/${roomId}/ready`),
   updateChecklist: (roomId: string, checklist: Record<string, boolean>) =>
     api.patch(`/tablet/room/${roomId}/checklist`, checklist),
-  changeMusic: (roomId: string, preference: string) =>
-    api.post(`/tablet/room/${roomId}/music`, { preference }),
+  changeMusic: (roomId: string, trackId: string | null, volume?: number) =>
+    api.post(`/tablet/room/${roomId}/music`, { trackId, volume }),
+  changeVolume: (roomId: string, volume: number) =>
+    api.post(`/tablet/room/${roomId}/volume`, { volume }),
+  exitRoom: (roomId: string, exitMethod: string, exitCode?: string) =>
+    api.post(`/tablet/room/${roomId}/exit`, { exitMethod, exitCode }),
+  verifyExitCode: (roomId: string, code: string) =>
+    api.post(`/tablet/room/${roomId}/exit/verify`, { code }),
 };
 
 // Attendant
@@ -78,6 +84,26 @@ export const queueApi = {
   get: (locationId: string) => api.get('/queue', { params: { locationId } }),
   override: (bookingId: string, newPosition: number) =>
     api.post('/queue/override', { bookingId, newPosition }),
+  manualAdd: (locationId: string, data: { phone: string; firstName?: string; lastName?: string; notes?: string }) =>
+    api.post('/queue/manual', data, { params: { locationId } }),
+};
+
+// Music
+export const musicApi = {
+  getTracks: (locationId: string) =>
+    api.get('/music/tracks', { params: { locationId } }),
+  getAllTracks: (locationId: string) =>
+    api.get('/music/tracks/all', { params: { locationId } }),
+  getDefault: (locationId: string) =>
+    api.get('/music/default', { params: { locationId } }),
+  createTrack: (locationId: string, data: any) =>
+    api.post('/music/tracks', data, { params: { locationId } }),
+  updateTrack: (trackId: string, data: any) =>
+    api.patch(`/music/tracks/${trackId}`, data),
+  deleteTrack: (trackId: string) =>
+    api.delete(`/music/tracks/${trackId}`),
+  setDefault: (locationId: string, trackId: string) =>
+    api.post(`/music/tracks/${trackId}/set-default`, {}, { params: { locationId } }),
 };
 
 // Admin

@@ -9,12 +9,19 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { QueueService } from './queue.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { IsUUID, IsInt } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsUUID, IsInt, IsString, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class OverrideQueueDto {
   @ApiProperty() @IsUUID() bookingId: string;
   @ApiProperty() @IsInt() newPosition: number;
+}
+
+class ManualQueueEntryDto {
+  @ApiProperty() @IsString() phone: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() firstName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() lastName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
 }
 
 @ApiTags('Queue')
@@ -34,5 +41,14 @@ export class QueueController {
   @ApiOperation({ summary: 'Override queue position (admin)' })
   override(@Body() dto: OverrideQueueDto) {
     return this.queueService.overrideQueue(dto.bookingId, dto.newPosition);
+  }
+
+  @Post('manual')
+  @ApiOperation({ summary: 'Manually add a walk-in guest to queue (attendant/reception)' })
+  manualAdd(
+    @Query('locationId') locationId: string,
+    @Body() dto: ManualQueueEntryDto,
+  ) {
+    return this.queueService.addManualEntry(locationId, dto);
   }
 }

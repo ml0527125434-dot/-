@@ -67,6 +67,18 @@ export interface QueueEntry {
   enteredAt: string;
 }
 
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist?: string;
+  url: string;
+  duration?: number;
+  category: string;
+  isDefault: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export interface RoomSession {
   id: string;
   roomId: string;
@@ -75,6 +87,9 @@ export interface RoomSession {
   readyForImmersionAt?: string;
   preparationChecklist?: Record<string, boolean>;
   musicPreference?: string;
+  musicTrackId?: string;
+  musicTrack?: MusicTrack;
+  musicVolume: number;
   equipmentReqs: EquipmentRequest[];
 }
 

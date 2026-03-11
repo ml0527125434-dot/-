@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import api, { adminApi, roomsApi } from '../lib/api';
+import api, { adminApi, roomsApi, musicApi } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -14,6 +14,11 @@ import {
   ClipboardList,
   Send,
   Save,
+  Music,
+  Plus,
+  Star,
+  Trash2,
+  Edit3,
 } from 'lucide-react';
 
 const LOCATION_ID = localStorage.getItem('zentro_location') || '';
@@ -42,6 +47,7 @@ export default function AdminDashboard() {
     { key: 'attendants', label: 'בלניות', icon: Users },
     { key: 'schedule', label: 'לוח זמנים', icon: Calendar },
     { key: 'pricing', label: 'מחירים', icon: CreditCard },
+    { key: 'music', label: 'מוזיקה', icon: Music },
     { key: 'sms', label: 'SMS', icon: MessageSquare },
     { key: 'features', label: 'פיצ׳רים', icon: ToggleLeft },
     { key: 'reports', label: 'דוחות', icon: BarChart3, path: '/admin/reports' },
@@ -88,6 +94,7 @@ export default function AdminDashboard() {
       <main className="flex-1 p-8 overflow-auto">
         {activeTab === 'dashboard' && <DashboardTab data={data} />}
         {activeTab === 'settings' && <SettingsTab />}
+        {activeTab === 'music' && <MusicTab />}
         {activeTab === 'rooms' && <RoomsTab rooms={data?.rooms} onRefresh={loadData} />}
         {activeTab === 'attendants' && <AttendantsTab />}
         {activeTab === 'schedule' && <ScheduleTab />}
@@ -565,6 +572,186 @@ function FeaturesTab() {
           </div>
         ))}
         {features.length === 0 && <div className="p-6 text-center text-gray-400">אין פיצ׳רים מוגדרים</div>}
+      </div>
+    </>
+  );
+}
+
+// ======= MUSIC TAB =======
+function MusicTab() {
+  const [tracks, setTracks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ title: '', artist: '', url: '', category: 'relaxing', isDefault: false });
+
+  const categoryLabels: Record<string, string> = {
+    relaxing: 'מרגיעה',
+    nature: 'צלילי טבע',
+    classical: 'קלאסית',
+    spiritual: 'רוחנית',
+    general: 'כללי',
+  };
+
+  useEffect(() => {
+    musicApi.getAllTracks(LOCATION_ID).then((res) => {
+      setTracks(res.data);
+      setLoading(false);
+    });
+  }, []);
+
+  const resetForm = () => {
+    setForm({ title: '', artist: '', url: '', category: 'relaxing', isDefault: false });
+    setShowAdd(false);
+    setEditingId(null);
+  };
+
+  const handleSave = async () => {
+    if (!form.title || !form.url) return;
+    if (editingId) {
+      await musicApi.updateTrack(editingId, form);
+    } else {
+      await musicApi.createTrack(LOCATION_ID, form);
+    }
+    const res = await musicApi.getAllTracks(LOCATION_ID);
+    setTracks(res.data);
+    resetForm();
+  };
+
+  const handleDelete = async (id: string) => {
+    await musicApi.deleteTrack(id);
+    const res = await musicApi.getAllTracks(LOCATION_ID);
+    setTracks(res.data);
+  };
+
+  const handleSetDefault = async (id: string) => {
+    await musicApi.setDefault(LOCATION_ID, id);
+    const res = await musicApi.getAllTracks(LOCATION_ID);
+    setTracks(res.data);
+  };
+
+  const startEdit = (track: any) => {
+    setForm({ title: track.title, artist: track.artist || '', url: track.url, category: track.category, isDefault: track.isDefault });
+    setEditingId(track.id);
+    setShowAdd(true);
+  };
+
+  if (loading) return <div className="text-gray-400">טוען...</div>;
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">ניהול מוזיקה</h2>
+        <button
+          onClick={() => { resetForm(); setShowAdd(true); }}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition flex items-center gap-2"
+        >
+          <Plus size={16} />
+          הוספת שיר
+        </button>
+      </div>
+
+      {/* Add/Edit form */}
+      {showAdd && (
+        <div className="bg-white rounded-xl shadow-sm border p-6 mb-6 max-w-2xl">
+          <h3 className="text-lg font-bold mb-4">{editingId ? 'עריכת שיר' : 'הוספת שיר חדש'}</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">שם השיר</label>
+              <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="w-full border rounded-lg px-4 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">אמן</label>
+              <input value={form.artist} onChange={e => setForm(f => ({ ...f, artist: e.target.value }))} className="w-full border rounded-lg px-4 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">קישור (URL)</label>
+              <input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} className="w-full border rounded-lg px-4 py-2" dir="ltr" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">קטגוריה</label>
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full border rounded-lg px-4 py-2">
+                {Object.entries(categoryLabels).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 mt-4">
+            <input type="checkbox" checked={form.isDefault} onChange={e => setForm(f => ({ ...f, isDefault: e.target.checked }))} className="rounded" />
+            <span className="text-sm">הגדר כמוזיקת רקע ברירת מחדל</span>
+          </label>
+          <div className="flex gap-3 mt-4">
+            <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition flex items-center gap-2">
+              <Save size={16} />
+              {editingId ? 'עדכן' : 'הוסף'}
+            </button>
+            <button onClick={resetForm} className="text-gray-500 px-4 py-2 hover:text-gray-700">ביטול</button>
+          </div>
+        </div>
+      )}
+
+      {/* Tracks list */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              <th className="text-right p-3">שם השיר</th>
+              <th className="text-right p-3">אמן</th>
+              <th className="text-right p-3">קטגוריה</th>
+              <th className="text-right p-3">ברירת מחדל</th>
+              <th className="text-right p-3">סטטוס</th>
+              <th className="text-right p-3">פעולות</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tracks.map((track: any) => (
+              <tr key={track.id} className={`border-b hover:bg-gray-50 ${!track.isActive ? 'opacity-40' : ''}`}>
+                <td className="p-3 font-medium">{track.title}</td>
+                <td className="p-3 text-gray-500">{track.artist || '-'}</td>
+                <td className="p-3">
+                  <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">
+                    {categoryLabels[track.category] || track.category}
+                  </span>
+                </td>
+                <td className="p-3">
+                  {track.isDefault ? (
+                    <Star size={16} className="text-yellow-500 fill-yellow-500" />
+                  ) : track.isActive ? (
+                    <button onClick={() => handleSetDefault(track.id)} className="text-xs text-gray-400 hover:text-yellow-500">
+                      הגדר
+                    </button>
+                  ) : null}
+                </td>
+                <td className="p-3">
+                  <span className={`text-xs px-2 py-1 rounded-full ${track.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {track.isActive ? 'פעיל' : 'מחוק'}
+                  </span>
+                </td>
+                <td className="p-3">
+                  {track.isActive && (
+                    <div className="flex gap-2">
+                      <button onClick={() => startEdit(track)} className="text-blue-500 hover:text-blue-700">
+                        <Edit3 size={14} />
+                      </button>
+                      <button onClick={() => handleDelete(track.id)} className="text-red-400 hover:text-red-600">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {tracks.length === 0 && (
+              <tr><td colSpan={6} className="p-6 text-center text-gray-400">אין שירים במאגר</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 p-4 bg-blue-50 rounded-xl text-sm text-blue-700">
+        <strong>מוזיקת ברירת מחדל:</strong> השיר המסומן בכוכב יתנגן אוטומטית ברקע בכל חדר.
+        הלקוחה יכולה לשנות את המוזיקה דרך הטאבלט, וביציאה מהחדר המוזיקה חוזרת לברירת המחדל.
       </div>
     </>
   );

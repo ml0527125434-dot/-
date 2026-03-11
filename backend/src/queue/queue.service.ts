@@ -59,4 +59,52 @@ export class QueueService {
 
     return null;
   }
+
+  async addManualEntry(
+    locationId: string,
+    data: { phone: string; firstName?: string; lastName?: string; notes?: string },
+  ) {
+    // Find or create the user
+    let user = await this.prisma.user.findUnique({
+      where: { phone: data.phone },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          phone: data.phone,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        },
+      });
+    }
+
+    // Create a walk-in booking
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nowTime = new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+    const booking = await this.prisma.booking.create({
+      data: {
+        locationId,
+        userId: user.id,
+        bookingDate: today,
+        timeSlotStart: nowTime,
+        timeSlotEnd: nowTime,
+        status: 'arrived',
+        paymentStatus: 'unpaid',
+        source: 'reception',
+        notesForAttendant: data.notes,
+        arrivedAt: new Date(),
+      },
+    });
+
+    // Add to queue
+    const entry = await this.addToQueue(locationId, booking.id);
+
+    return {
+      ...entry,
+      booking: { ...booking, user },
+    };
+  }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { attendantApi } from '../lib/api';
+import { attendantApi, queueApi } from '../lib/api';
 import { useLocationSocket } from '../hooks/useSocket';
+import { UserPlus } from 'lucide-react';
 import type { Room } from '../types';
 
 const LOCATION_ID = localStorage.getItem('zentro_location') || '';
@@ -8,6 +9,10 @@ const LOCATION_ID = localStorage.getItem('zentro_location') || '';
 export default function AttendantDashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showAddToQueue, setShowAddToQueue] = useState(false);
+  const [queueForm, setQueueForm] = useState({ phone: '', firstName: '', lastName: '', notes: '' });
+  const [addingToQueue, setAddingToQueue] = useState(false);
+  const [queueSuccess, setQueueSuccess] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!LOCATION_ID) return;
@@ -35,6 +40,21 @@ export default function AttendantDashboard() {
   const handleComplete = async (roomId: string) => {
     await attendantApi.complete(roomId);
     loadData();
+  };
+
+  const handleAddToQueue = async () => {
+    if (!queueForm.phone) return;
+    setAddingToQueue(true);
+    try {
+      await queueApi.manualAdd(LOCATION_ID, queueForm);
+      setQueueForm({ phone: '', firstName: '', lastName: '', notes: '' });
+      setQueueSuccess(true);
+      setTimeout(() => { setQueueSuccess(false); setShowAddToQueue(false); }, 2000);
+      loadData();
+    } catch {
+      // handle error
+    }
+    setAddingToQueue(false);
   };
 
   if (loading) {
@@ -79,12 +99,86 @@ export default function AttendantDashboard() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-blue-900">מסך בלנית</h1>
-        <div className="text-lg font-mono">
-          {new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowAddToQueue(!showAddToQueue)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            <UserPlus size={16} />
+            הוספה ידנית לתור
+          </button>
+          <div className="text-lg font-mono">
+            {new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+          </div>
         </div>
       </header>
 
       <div className="p-6 space-y-6">
+        {/* Manual queue add form */}
+        {showAddToQueue && (
+          <div className="bg-white border-2 border-blue-200 rounded-xl p-6">
+            <h2 className="text-lg font-bold mb-4">הוספת לקוחה לתור באופן ידני</h2>
+            {queueSuccess ? (
+              <div className="bg-green-50 text-green-700 p-4 rounded-lg text-center font-medium">
+                הלקוחה נוספה לתור בהצלחה!
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">טלפון *</label>
+                    <input
+                      value={queueForm.phone}
+                      onChange={e => setQueueForm(f => ({ ...f, phone: e.target.value }))}
+                      placeholder="050-1234567"
+                      className="w-full border rounded-lg px-4 py-2"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">שם פרטי</label>
+                    <input
+                      value={queueForm.firstName}
+                      onChange={e => setQueueForm(f => ({ ...f, firstName: e.target.value }))}
+                      placeholder="שם"
+                      className="w-full border rounded-lg px-4 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">שם משפחה</label>
+                    <input
+                      value={queueForm.lastName}
+                      onChange={e => setQueueForm(f => ({ ...f, lastName: e.target.value }))}
+                      placeholder="משפחה"
+                      className="w-full border rounded-lg px-4 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">הערות</label>
+                    <input
+                      value={queueForm.notes}
+                      onChange={e => setQueueForm(f => ({ ...f, notes: e.target.value }))}
+                      placeholder="הערות לבלנית"
+                      className="w-full border rounded-lg px-4 py-2"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleAddToQueue}
+                    disabled={!queueForm.phone || addingToQueue}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    {addingToQueue ? 'מוסיף...' : 'הוסף לתור'}
+                  </button>
+                  <button onClick={() => setShowAddToQueue(false)} className="text-gray-500 px-4 py-2">
+                    ביטול
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {/* Ready for immersion - priority */}
         {data.readyForImmersion?.length > 0 && (
           <section>
